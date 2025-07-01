@@ -22,6 +22,8 @@ public class Engine
 
     private DateTimeOffset _lastUpdate = DateTimeOffset.Now;
 
+    private const int AttackBombDistance = 80;
+
     public Engine(GameRenderer renderer, Input input)
     {
         _renderer = renderer;
@@ -95,13 +97,35 @@ public class Engine
         bool isAttacking = _input.IsKeyAPressed() && (up + down + left + right <= 1);
         bool addBomb = _input.IsKeyBPressed();
 
+        bool spawnAttackBomb = false;
+
         _player.UpdatePosition(up, down, left, right, 48, 48, msSinceLastFrame);
         if (isAttacking)
         {
+            //if (_player.State.State != PlayerObject.PlayerState.Attack)
+            //{
+            //    spawnAttackBomb = true;
+            //}
             _player.Attack();
+            DeflectNearbyBombs();
         }
         
         _scriptEngine.ExecuteAll(this);
+
+        if (spawnAttackBomb)
+        {
+            var playerPos = _player.Position;
+            var offset = _player.State.Direction switch
+            {
+                PlayerObject.PlayerStateDirection.Up => (X: 0, Y: -AttackBombDistance),
+                PlayerObject.PlayerStateDirection.Down => (X: 0, Y: AttackBombDistance),
+                PlayerObject.PlayerStateDirection.Left => (X: -AttackBombDistance, Y: 0),
+                PlayerObject.PlayerStateDirection.Right => (X: AttackBombDistance, Y: 0),
+                _ => (X: 0, Y: 0)
+            };
+            AddBomb(playerPos.X + offset.X, playerPos.Y + offset.Y, false);
+        }
+
 
         if (addBomb)
         {
@@ -212,7 +236,51 @@ public class Engine
         SpriteSheet spriteSheet = SpriteSheet.Load(_renderer, "BombExploding.json", "Assets");
         spriteSheet.ActivateAnimation("Explode");
 
-        TemporaryGameObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
+        //TemporaryGameObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
+        BombObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
         _gameObjects.Add(bomb.Id, bomb);
+    }
+
+    private void DeflectNearbyBombs()
+    {
+        if (_player == null)
+        {
+            return;
+        }
+
+        if (_player.State.State != PlayerObject.PlayerState.Attack)
+        {
+            return;
+        }
+
+        var bombs = _gameObjects.Values
+            .OfType<BombObject>()
+            .Where(b => !b.IsExpired && !b.Deflected)
+            .ToList();
+
+        foreach (var bomb in bombs)
+        {
+            var dx = bomb.Position.X - _player.Position.X;
+            var dy = bomb.Position.Y - _player.Position.Y;
+
+            if (dx * dx + dy * dy > 50 * 50)
+            {
+                continue;
+            }
+
+            bool inDir = _player.State.Direction switch
+            {
+                PlayerObject.PlayerStateDirection.Up => dy <= 0 && Math.Abs(dx) <= 40,
+                PlayerObject.PlayerStateDirection.Down => dy >= 0 && Math.Abs(dx) <= 40,
+                PlayerObject.PlayerStateDirection.Left => dx <= 0 && Math.Abs(dy) <= 40,
+                PlayerObject.PlayerStateDirection.Right => dx >= 0 && Math.Abs(dy) <= 40,
+                _ => false
+            };
+
+            if (inDir)
+            {
+                bomb.Deflect(_player.State.Direction);
+            }
+        }
     }
 }
