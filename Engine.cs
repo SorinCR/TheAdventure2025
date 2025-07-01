@@ -20,6 +20,9 @@ public class Engine
     private Level _currentLevel = new();
     private PlayerObject? _player;
 
+    private readonly int _gameOverTextureId;
+    private readonly TextureData _gameOverTextureData;
+
     private DateTimeOffset _lastUpdate = DateTimeOffset.Now;
 
     private const int AttackBombDistance = 80;
@@ -29,11 +32,17 @@ public class Engine
         _renderer = renderer;
         _input = input;
 
+        _gameOverTextureId = _renderer.LoadTexture(Path.Combine("Assets", "game_over.png"), out _gameOverTextureData);
+
         _input.OnMouseClick += (_, coords) => AddBomb(coords.x, coords.y);
     }
 
     public void SetupWorld()
     {
+        _gameObjects.Clear();
+        _loadedTileSets.Clear();
+        _tileIdMap.Clear();
+
         _player = new(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100);
 
         var levelContent = File.ReadAllText(Path.Combine("Assets", "terrain.tmj"));
@@ -87,6 +96,16 @@ public class Engine
 
         if (_player == null)
         {
+            return;
+        }
+
+        if (_player.State.State == PlayerObject.PlayerState.GameOver)
+        {
+            if (_input.IsKeyRPressed())
+            {
+                SetupWorld();
+            }
+
             return;
         }
 
@@ -144,6 +163,16 @@ public class Engine
         RenderTerrain();
         RenderAllObjects();
 
+        if (_player != null && _player.State.State == PlayerObject.PlayerState.GameOver)
+        {
+            var winSize = _renderer.WindowSize;
+            var src = new Rectangle<int>(0, 0, _gameOverTextureData.Width, _gameOverTextureData.Height);
+            var dst = new Rectangle<int>((winSize.Width - _gameOverTextureData.Width) / 2,
+                (winSize.Height - _gameOverTextureData.Height) / 2,
+                _gameOverTextureData.Width, _gameOverTextureData.Height);
+            _renderer.RenderTextureScreen(_gameOverTextureId, src, dst);
+        }
+
         _renderer.PresentFrame();
     }
 
@@ -163,7 +192,7 @@ public class Engine
         {
             _gameObjects.Remove(id, out var gameObject);
 
-            if (_player == null)
+            if (_player == null || _player.State.State == PlayerObject.PlayerState.GameOver)
             {
                 continue;
             }

@@ -18,6 +18,8 @@ public unsafe class GameRenderer
     private Dictionary<int, TextureData> _textureData = new();
     private int _textureId;
 
+    public (int Width, int Height) WindowSize => _window.Size;
+
     public GameRenderer(Sdl sdl, GameWindow window)
     {
         _sdl = sdl;
@@ -88,6 +90,16 @@ public unsafe class GameRenderer
                 in translatedDst,
                 angle,
                 in center, flip);
+        }
+    }
+
+    public void RenderTextureScreen(int textureId, Rectangle<int> src, Rectangle<int> dst,
+    RendererFlip flip = RendererFlip.None, double angle = 0.0, Point center = default)
+    {
+        if (_texturePointers.TryGetValue(textureId, out var imageTexture))
+        {
+            _sdl.RenderCopyEx(_renderer, (Texture*)imageTexture, in src,
+                in dst, angle, in center, flip);
         }
     }
 
